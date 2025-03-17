@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Importer Lookup</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            margin-top: 50px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px gray;
+            width: 50%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        h1 {
+            color: #007BFF;
+        }
+        .btn {
+            padding: 10px 20px;
+            font-size: 18px;
+            color: white;
+            background: #007BFF;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            margin-top: 10px;
+            transition: 0.3s;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .output {
+            margin-top: 20px;
+            font-size: 18px;
+            text-align: left;
+            background: #ffffff;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0px 0px 5px gray;
+            display: none;
+        }
+        .error {
+            color: red;
+        }
+        #save-pdf {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Importer Lookup</h1>
+        <p>Enter NTN (7 digits) or Importer Name to fetch details:</p>
+        <form id="search-form" method="POST" onsubmit="return validateForm()">
+            <input type="text" name="importer_name" class="input-box" placeholder="Enter Importer Name">
+            <input type="text" id="ntn" name="ntn" class="input-box" placeholder="Enter NTN (7 digits)">
+            <p id="ntn-error" class="error"></p>
+            <button type="submit" class="btn">Search</button>
+        </form>
+        {% if error %}
+            <p class="error">{{ error }}</p>
+        {% endif %}
+        {% if result %}
+            <div class="output" id="result-section">
+                {% if "error" in result %}
+                    <p class="error">{{ result["error"] }}</p>
+                {% else %}
+                    {% for importer, details in result.items() %}
+                        <h3>Importer: {{ importer.upper() }}</h3>
+                        <p><b>NTN:</b> {{ details['NTN'] }}</p>
+                        <p><b>Total Import Value:</b> {{ details['Total_Import_Value'] }}</p>
+                        <p><b>Total GDs:</b> {{ details['No_of_GDs'] }}</p>
+                        <p><b>Clearing Agent Count:</b> {{ details['Clearing_Agent_Details']|length }}</p>
+                        <p><b>Agent Loyalty:</b> {{ details['Agent_Loyalty'] }}%</p>
+                        <p><b>Loyalty Explanation:</b> {{ details['Loyalty_Explanation'] }}</p>
+                        <p><b>Marketing Risk:</b> {{ details['Marketing_Risk'] }}%</p>
+                        <p><b>Risk Explanation:</b> {{ details['Risk_Explanation'] }}</p>
+                        <h4>Classifications:</h4>
+                        <ul>
+                            {% for key, value in details['Classifications'].items() %}
+                                <li><b>{{ key }}:</b> {{ value }}</li>
+                            {% endfor %}
+                        </ul>
+                        <h4>Clearing Agent Details:</h4>
+                        <ul>
+                            {% for agent, agent_details in details['Clearing_Agent_Details'].items() %}
+                                <li>
+                                    <b>{{ agent }}</b><br>
+                                    Total GDs: {{ agent_details['No_of_GDs'] }}<br>
+                                    Average Import Value: {{ agent_details['Average_Import_Value'] }}<br>
+                                    Total Import Value: {{ agent_details['Total_Import_Value'] }}
+                                </li>
+                                <br>
+                            {% endfor %}
+                        </ul>
+                    {% endfor %}
+                {% endif %}
+            </div>
+            <button id="save-pdf" class="btn">Save as PDF</button>
+        {% endif %}
+    </div>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+    if (document.getElementById("result-section")) {
+        document.getElementById("result-section").style.display = "block";
+        document.getElementById("save-pdf").style.display = "inline-block";
+    }
+
+    document.getElementById("save-pdf").addEventListener("click", function () {
+        const { jsPDF } = window.jspdf;
+        let doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+
+        let margin = 20;
+        let y = margin;
+        let lineHeight = 8;
+        let pageWidth = doc.internal.pageSize.getWidth() - 2 * margin;
+        let pageHeight = doc.internal.pageSize.getHeight() - margin;
+
+        // Add Skylink Header
+        let img = new Image();
+        img.src = "https://media.licdn.com/dms/image/v2/C4D1BAQGHGX0KCsdbiQ/company-background_10000/company-background_10000/0/1600689200385/skylinkdistribution_cover?e=2147483647&v=beta&t=IZ9NMfowQB14UpfWG5kXPVKsGJnFNCv7HEFyXBNafy0";
+
+        img.onload = function () {
+            doc.addImage(img, "JPEG", margin, y, 170, 50); // Add the image
+            y += 30; // Space after the image
+
+            y += lineHeight+22;
+
+            let allImporters = document.querySelectorAll(".output h3");
+            let firstImporterNTN = "";
+            let firstImporterName = "";
+
+            allImporters.forEach((importerElement, index) => {
+                if (y >= pageHeight - margin) {
+                    doc.addPage();
+                    y = margin;
+                }
+
+            let importerName = importerElement.textContent.replace("Importer: ", "").trim();
+            let parentDiv = importerElement.parentNode;
+            let ntn = parentDiv.querySelector("p:nth-of-type(1)").textContent.replace("NTN: ", "").trim();
+            let totalImportValue = parentDiv.querySelector("p:nth-of-type(2)").textContent.replace("Total Import Value: ", "").trim();
+            let totalGDs = parentDiv.querySelector("p:nth-of-type(3)").textContent.replace("Total GDs: ", "").trim();
+            let clearingAgentCount = parentDiv.querySelector("p:nth-of-type(4)").textContent.replace("Clearing Agent Count: ", "").trim();
+            let agentLoyalty = parentDiv.querySelector("p:nth-of-type(5)").textContent.replace("Agent Loyalty: ", "").trim();
+            let loyaltyExplanation = parentDiv.querySelector("p:nth-of-type(6)").textContent.replace("Loyalty Explanation: ", "").trim();
+            let marketingRisk = parentDiv.querySelector("p:nth-of-type(7)").textContent.replace("Marketing Risk: ", "").trim();
+            let riskExplanation = parentDiv.querySelector("p:nth-of-type(8)").textContent.replace("Risk Explanation: ", "").trim();
+
+                if (index === 0) {
+                    firstImporterNTN = ntn;
+                    firstImporterName = importerName.replace(/\s+/g, "_");
+                }
+
+                // Function to align labels and values
+                function printLabelAndValue(label, value) {
+                    doc.setFont("helvetica", "bold");
+                    doc.text(label, margin, y);
+                    let labelWidth = doc.getTextWidth(label + " ");
+                    doc.setFont("helvetica", "normal");
+                    doc.text(value, margin + labelWidth, y);
+                    y += lineHeight;
+                }
+
+                // Printing all labels and values
+                printLabelAndValue("Importer Name:", importerName);
+                printLabelAndValue("NTN:", ntn);
+                printLabelAndValue("Total Import Value:", totalImportValue);
+                printLabelAndValue("Total GDs:", totalGDs);
+                printLabelAndValue("Clearing Agent Count:", clearingAgentCount);
+                y += lineHeight + 2; // Extra spacing
+
+                printLabelAndValue("Agent Loyalty:", agentLoyalty);
+                printLabelAndValue("Marketing Risk:", marketingRisk);
+                y += lineHeight + 2; // Extra spacing before Clearing Agents
+
+                // Function to print Clearing Agent Details with correct formatting and spacing
+                function printAgentDetail(agentIndex, agentText) {
+                    if (y >= pageHeight - margin) {
+                        doc.addPage();
+                        y = margin;
+                    }
+
+                    let lines = agentText.split("<br>").map(line => line.replace(/<[^>]*>/g, "").trim()); // Clean up HTML
+
+                    // Print Agent Name in Bold
+                    doc.setFont("helvetica", "bold");
+                    doc.text(`${agentIndex + 1}. ${lines[0]}`, margin, y);
+                    y += lineHeight; // Move to next line
+
+                    // Print Additional Details in Normal Font with Proper Spacing
+                    doc.setFont("helvetica", "normal");
+                    for (let i = 1; i < lines.length; i++) {
+                        if (lines[i]) {
+                            doc.text("   " + lines[i], margin + 5, y); // Indent the details
+                            y += lineHeight; // Move to the next line to avoid overlap
+                        }
+                    }
+
+                    y += lineHeight; // Extra spacing between agents
+                }
+
+                // **CLEARING AGENT DETAILS**
+                let agentDetails = parentDiv.querySelectorAll("ul:nth-of-type(2) li");
+                if (agentDetails.length > 0) {
+                    doc.setFont("helvetica", "bold");
+                    doc.text("Clearing Agent Details:", margin, y);
+                    y += lineHeight;
+
+                    agentDetails.forEach((agent, index) => {
+                        printAgentDetail(index, agent.innerHTML);
+                    });
+                }
+
+                if (index < allImporters.length - 1) {
+                    doc.addPage();
+                    y = margin;
+                }
+            });
+
+            let fileName = `${firstImporterNTN}_${firstImporterName}.pdf`;
+            doc.save(fileName);
+        };
+    });
+});
+    </script>
+</body>
+</html>

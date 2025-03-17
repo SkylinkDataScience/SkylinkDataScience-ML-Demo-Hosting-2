@@ -1,0 +1,2 @@
+IP: 192.168.10.188 | PC: DESKTOP-NTR5LVI | Importer: CNERGYICO PK LTD | NTN: N/A | Status: Found
+IP: 192.168.10.188 | PC: DESKTOP-NTR5LVI | Importer: N/A | NTN: 0711554 | Status: Found
